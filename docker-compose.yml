@@ -1,0 +1,118 @@
+name: multivendor
+
+# Every service on this network can reach every other service by its
+# service name as a hostname (e.g. the Django container connects to
+# MySQL at host "db", not "localhost") — Compose creates that network
+# and the DNS entries automatically, one reason not to run these
+# processes directly on the host instead.
+services:
+
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    ports:
+      - "3306:3306"          # exposed to host only so you can inspect with a local SQL client; the backend talks to "db:3306" internally
+    volumes:
+      - mysql_data:/var/lib/mysql                          # named volume: data survives `docker compose down`
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro  # auto-run on first boot only (empty data dir)
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: db
+      REDIS_HOST: redis
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app          # bind mount: local file edits show up in the container without a rebuild
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python manage.py runserver 0.0.0.0:8000
+
+  # Executes Celery tasks (sending email/SMS, generating vendor payouts,
+  # syncing shipment tracking) off the request/response cycle. Same
+  # image as `backend` — only the container's start command differs —
+  # so application code never has to know whether it's running inside
+  # the web process or a worker process.
+  celery_worker:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: db
+      REDIS_HOST: redis
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A config worker --loglevel=info
+
+  # Fires scheduled tasks (e.g. "run vendor payouts every Monday") by
+  # dropping them onto the same queue celery_worker consumes. Split
+  # into its own container so a beat restart can't drop in-flight jobs
+  # a worker is executing, and vice versa.
+  celery_beat:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: db
+      REDIS_HOST: redis
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A config beat --loglevel=info
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules       # anonymous volume: keeps container's node_modules from being shadowed by the host bind mount above
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+    depends_on:
+      - backend
+    command: npm run dev -- --host 0.0.0.0
+
+volumes:
+  mysql_data:
