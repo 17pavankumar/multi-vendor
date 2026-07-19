@@ -23,24 +23,30 @@ import mysql.connector
 
 def split_statements(sql_text: str) -> list[str]:
     """Splits a .sql file into individual statements on top-level
-    semicolons, skipping comment lines and blank lines. Good enough for
+    semicolons, stripping every comment along the way. Good enough for
     this schema file specifically: it has no stored procedures or
     triggers with semicolons inside their body, which would need a
     smarter DELIMITER-aware parser.
 
-    A statement boundary is decided from the *code* portion of a line
-    (everything before an inline `-- comment`), not the raw line —
-    several lines in schema.sql end in `...;  -- some comment`, and
-    checking the raw line's ending would miss the semicolon and glue
-    that statement onto the next one."""
+    Comments are stripped entirely, not just used to find the statement
+    boundary. Confirmed against a real local MySQL 8.0.44 instance that
+    sending `STATEMENT; -- trailing comment` as a single query — even
+    with no quotes or special characters in the comment — makes
+    mysql-connector-python's C extension silently drop the connection
+    (conn.is_connected() goes False right after that execute() call,
+    with no exception raised on that call itself). Only the next
+    execute() surfaces it, as "MySQL Connection not available." Once
+    comments never reach the server, the problem disappears."""
     statements = []
     current_lines = []
     for line in sql_text.splitlines():
         stripped = line.strip()
         if stripped.startswith("--") or not stripped:
             continue
-        current_lines.append(line)
         code_only = line.split("--", 1)[0].rstrip()
+        if not code_only:
+            continue
+        current_lines.append(code_only)
         if code_only.endswith(";"):
             statements.append("\n".join(current_lines))
             current_lines = []
@@ -62,16 +68,24 @@ def main():
     statements = split_statements(sql_text)
 
     conn = mysql.connector.connect(host=args.host, port=args.port, user=args.user, password=args.password)
-    cursor = conn.cursor()
     try:
         for statement in statements:
+            # A fresh cursor per statement, rather than one cursor reused
+            # across the whole loop: reusing a single cursor across DDL
+            # statements like CREATE DATABASE reliably produced
+            # "2014 (HY000): Commands out of sync" against a real local
+            # MySQL 8.0.44 instance (confirmed while writing this
+            # script) — even with buffered=True. A short-lived cursor
+            # per statement sidesteps whatever internal state that
+            # leaves behind.
+            cursor = conn.cursor()
             cursor.execute(statement)
+            cursor.close()
     except mysql.connector.Error as exc:
         print(f"Failed on statement:\n{statement}\n", file=sys.stderr)
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
     conn.commit()
-    cursor.close()
     conn.close()
     print(f"Applied {len(statements)} statements from {args.sql_file}")
 

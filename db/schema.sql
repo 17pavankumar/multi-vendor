@@ -151,16 +151,17 @@ CREATE TABLE product_images (
     product_id          BIGINT NOT NULL,
     image_url           VARCHAR(500) NOT NULL,
     alt_text            VARCHAR(255),
+    -- "At most one primary image per product" is enforced at the
+    -- application layer (same pattern as addresses.is_default), not by
+    -- a DB constraint. A generated column keyed off product_id — the
+    -- earlier design here — was tried and confirmed broken: MySQL/
+    -- InnoDB refuses ON DELETE CASCADE on a foreign key column that a
+    -- generated column depends on ("ERROR 1215: Cannot add foreign key
+    -- constraint"), and CASCADE here is the behavior we actually want
+    -- (delete a product, its images go with it).
     is_primary          BOOLEAN NOT NULL DEFAULT FALSE,
-    -- Generated column: equals product_id when this row is the primary
-    -- image, otherwise NULL. MySQL's UNIQUE index allows unlimited NULLs
-    -- but only one row per non-NULL value — so this enforces "at most
-    -- one primary image per product" without a native partial index
-    -- (which MySQL doesn't support, unlike Postgres).
-    primary_of_product  BIGINT GENERATED ALWAYS AS (IF(is_primary, product_id, NULL)) STORED,
     sort_order          SMALLINT NOT NULL DEFAULT 0,
     KEY idx_product_images_product (product_id),
-    UNIQUE KEY uq_product_images_primary (primary_of_product),
     CONSTRAINT fk_product_images_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
