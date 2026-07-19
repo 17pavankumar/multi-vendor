@@ -1,7 +1,7 @@
 import pytest
 
 from apps.users.models import User
-from apps.users.tests.conftest import TEST_PASSWORD
+from conftest import TEST_PASSWORD
 
 pytestmark = pytest.mark.django_db
 
@@ -26,7 +26,10 @@ def test_register_creates_customer(api_client):
     assert user.password != TEST_PASSWORD
 
 
-def test_register_rejects_admin_role(api_client):
+def test_register_ignores_posted_role(api_client):
+    # `role` isn't a field on RegisterSerializer at all, so posting one
+    # (even "admin") is silently dropped by DRF rather than rejected —
+    # the account is still created, just always as a customer.
     response = api_client.post(
         "/api/auth/register/",
         {
@@ -38,8 +41,9 @@ def test_register_rejects_admin_role(api_client):
         },
     )
 
-    assert response.status_code == 400
-    assert not User.objects.filter(email="hacker@example.com").exists()
+    assert response.status_code == 201
+    user = User.objects.get(email="hacker@example.com")
+    assert user.role == User.Role.CUSTOMER
 
 
 def test_register_rejects_weak_password(api_client):

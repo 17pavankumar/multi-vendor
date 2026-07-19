@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from apps.users.tests.conftest import TEST_PASSWORD
+from conftest import TEST_PASSWORD
 
 pytestmark = pytest.mark.django_db
 
