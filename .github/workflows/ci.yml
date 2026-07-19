@@ -36,18 +36,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install MySQL client
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mysql-client
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: db/requirements.txt
+
+      # Deliberately not shelling out to an OS `mysql` CLI binary here:
+      # Ubuntu's `mysql-client` apt package is a transitional package
+      # that actually installs MariaDB's client, which has a history of
+      # failing to authenticate against MySQL 8's default
+      # caching_sha2_password plugin. mysql-connector-python is
+      # Oracle's own driver, pinned in db/requirements.txt, so this
+      # step behaves identically on every runner instead of depending
+      # on whatever happens to be preinstalled.
+      - name: Install schema-validation dependencies
+        run: pip install -r db/requirements.txt
 
       - name: Apply schema.sql
-        run: mysql -h127.0.0.1 -uroot -prootpassword < db/schema.sql
+        run: python db/apply_schema.py db/schema.sql --host 127.0.0.1 --port 3306 --user root --password rootpassword
 
       - name: Sanity-check table count
         run: |
-          count=$(mysql -h127.0.0.1 -uroot -prootpassword -N -e \
-            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='multivendor';")
-          echo "Tables created: $count"
-          test "$count" -eq 21
+          python -c "
+          import mysql.connector
+          conn = mysql.connector.connect(host='127.0.0.1', port=3306, user='root', password='rootpassword')
+          cursor = conn.cursor()
+          cursor.execute(\"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='multivendor'\")
+          count = cursor.fetchone()[0]
+          print(f'Tables created: {count}')
+          assert count == 21, f'expected 21 tables, got {count}'
+          "
 
   backend:
     name: Lint & test backend

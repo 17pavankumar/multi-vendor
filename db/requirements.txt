@@ -1,0 +1,4 @@
+# Only used by db/apply_schema.py (schema validation, run in CI's
+# `schema-sql` job) — not a runtime dependency of the Django app, so it
+# lives here rather than in backend/requirements*.txt.
+mysql-connector-python==9.7.0
