@@ -2,20 +2,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, generics, permissions
 
 from apps.products.filters import ProductFilter
-from apps.products.models import Product
+from apps.products.selectors import visible_products
 from apps.products.serializers import ProductDetailSerializer, ProductListSerializer
-
-
-def _visible_products():
-    """Only products that are both live (status=active) AND belong to
-    an approved vendor — a vendor's draft catalog, or any product from
-    a still-pending/rejected/suspended vendor, never shows up publicly
-    regardless of the product's own status."""
-    return (
-        Product.objects.filter(status=Product.Status.ACTIVE, vendor__status="approved")
-        .select_related("vendor", "category")
-        .prefetch_related("images")
-    )
 
 
 class ProductListView(generics.ListAPIView):
@@ -30,7 +18,7 @@ class ProductListView(generics.ListAPIView):
     search_fields = ["name", "description"]
 
     def get_queryset(self):
-        return _visible_products()
+        return visible_products().prefetch_related("images")
 
 
 class ProductDetailView(generics.RetrieveAPIView):
@@ -41,4 +29,4 @@ class ProductDetailView(generics.RetrieveAPIView):
     lookup_field = "slug"
 
     def get_queryset(self):
-        return _visible_products()
+        return visible_products().prefetch_related("images")
