@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.db import transaction
 
 from apps.cart.models import Cart
+from apps.commission.selectors import resolve_commission_rate
 from apps.coupons.models import Coupon
 from apps.inventory.models import Inventory
 from apps.orders.models import CouponRedemption, Order, OrderItem
@@ -75,10 +76,7 @@ def checkout(user, shipping_address_id, billing_address_id, coupon_code=None):
 
     for cart_item, inventory, line_subtotal in reservations:
         vendor = cart_item.product.vendor
-        # Category/vendor-specific commission overrides (schema.sql's
-        # commission_rules table) belong to a later admin-facing phase
-        # — for now every item uses the vendor's own default rate.
-        commission_rate = vendor.default_commission_rate
+        commission_rate = resolve_commission_rate(vendor, cart_item.product.category)
         commission_amount = (line_subtotal * commission_rate / Decimal("100")).quantize(Decimal("0.01"))
         OrderItem.objects.create(
             order=order,

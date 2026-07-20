@@ -10,6 +10,7 @@ so they can't drift out of sync with each other.
 from datetime import timedelta
 from pathlib import Path
 
+from celery.schedules import crontab
 from decouple import Csv, config
 
 # backend/config/settings.py -> parents[1] == backend/
@@ -193,6 +194,17 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
+
+# What the celery_beat container (docker-compose.yml) actually runs —
+# generates the previous week's vendor payouts every Monday at 02:00.
+# See apps.commission.tasks.generate_last_weeks_payouts for why this
+# can't just schedule generate_vendor_payouts directly with static args.
+CELERY_BEAT_SCHEDULE = {
+    "generate-weekly-vendor-payouts": {
+        "task": "apps.commission.tasks.generate_last_weeks_payouts",
+        "schedule": crontab(day_of_week="monday", hour=2, minute=0),
+    },
+}
 
 
 # ---------------------------------------------------------------------
