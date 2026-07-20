@@ -1,3 +1,4 @@
+from django.db.models import Avg
 from rest_framework import serializers
 
 from apps.products.models import Product
@@ -32,10 +33,25 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     vendor_store_name = serializers.CharField(source="vendor.store_name", read_only=True)
     category_name = serializers.CharField(source="category.name", read_only=True)
     images = ProductImageSerializer(many=True, read_only=True)
+    average_rating = serializers.SerializerMethodField()
+    review_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = [
-            "id", "name", "slug", "description", "price", "discount_price",
-            "sku", "vendor_store_name", "category_name", "images", "created_at",
+            "id", "name", "slug", "description", "price", "discount_price", "sku",
+            "vendor_store_name", "category_name", "images", "average_rating",
+            "review_count", "created_at",
         ]
+
+    def get_average_rating(self, product):
+        # `product.reviews` is apps.reviews.Review's reverse accessor —
+        # products deliberately has no import of apps.reviews at all;
+        # Django wires the relation up via the app registry, so using
+        # it here doesn't create a module-level dependency in either
+        # direction between the two apps.
+        result = product.reviews.filter(is_approved=True).aggregate(avg=Avg("rating"))["avg"]
+        return round(result, 2) if result is not None else None
+
+    def get_review_count(self, product):
+        return product.reviews.filter(is_approved=True).count()

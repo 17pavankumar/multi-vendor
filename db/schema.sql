@@ -347,7 +347,7 @@ CREATE TABLE shipments (
     shipped_at          DATETIME,
     delivered_at        DATETIME,
     estimated_delivery  DATE,
-    KEY idx_shipments_order (order_id),
+    UNIQUE KEY uq_shipments_order_vendor (order_id, vendor_id),
     KEY idx_shipments_vendor (vendor_id),
     CONSTRAINT fk_shipments_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
     CONSTRAINT fk_shipments_vendor FOREIGN KEY (vendor_id) REFERENCES vendor_profiles(id) ON DELETE RESTRICT
