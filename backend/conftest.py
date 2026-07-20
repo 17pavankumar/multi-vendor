@@ -80,3 +80,33 @@ def pending_vendor(django_user_model):
         role=django_user_model.Role.VENDOR,
     )
     return VendorProfile.objects.create(user=user, store_name="Pending Store", store_slug="pending-store")
+
+
+@pytest.fixture
+def mock_razorpay(monkeypatch):
+    """Patches the Razorpay client everywhere apps.payments.services
+    calls get_client(), so tests never hit Razorpay's real API.
+    Returns the MagicMock so a test can inspect calls or override
+    behavior — e.g. `mock_razorpay.utility.verify_payment_signature.
+    side_effect = razorpay.errors.SignatureVerificationError()` to
+    simulate a forged/incorrect signature."""
+    from unittest.mock import MagicMock
+
+    mock_client = MagicMock()
+    mock_client.order.create.return_value = {"id": "order_test_razorpay_123"}
+    monkeypatch.setattr("apps.payments.services.get_client", lambda: mock_client)
+    return mock_client
+
+
+@pytest.fixture
+def address(customer):
+    from apps.users.models import Address
+
+    return Address.objects.create(
+        user=customer,
+        line1="221B Baker Street",
+        city="London",
+        state="London",
+        postal_code="NW16XE",
+        country="GB",
+    )
