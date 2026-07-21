@@ -23,9 +23,26 @@ export default function Layout() {
             <span className="navbar-toggler-icon" />
           </button>
           <div className="collapse navbar-collapse" id="navbarNav">
-            <ul className="navbar-nav ms-auto align-items-lg-center">
+            <ul className="navbar-nav me-auto">
+              <li className="nav-item">
+                <Link className="nav-link" to="/products">
+                  Products
+                </Link>
+              </li>
+            </ul>
+            <ul className="navbar-nav align-items-lg-center">
               {isAuthenticated ? (
                 <>
+                  <li className="nav-item">
+                    <Link className="nav-link" to="/wishlist">
+                      Wishlist
+                    </Link>
+                  </li>
+                  <li className="nav-item">
+                    <Link className="nav-link" to="/cart">
+                      Cart
+                    </Link>
+                  </li>
                   <li className="nav-item">
                     <span className="nav-link">
                       {user.email} <span className="badge text-bg-secondary text-uppercase">{user.role}</span>
