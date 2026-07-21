@@ -18,18 +18,18 @@ Payments are handled via **Razorpay**.
 ## Status
 
 This project is being built incrementally, one reviewable phase at a
-time. Done so far:
+time. Backend is feature-complete; frontend is in progress.
 
 - [x] Repo scaffold, Docker Compose (MySQL, Redis, Django, Celery worker/beat, React), `db/schema.sql`
 - [x] Auth: custom email/role-based user model, JWT login (with role embedded in the token), registration, profile, addresses
 - [x] CI: lint (ruff) + real test suite + migrations, all run against an actual MySQL service container
-- [ ] Vendor approval, categories & products, inventory
-- [ ] Cart, wishlist, coupons
-- [ ] Checkout, orders, Razorpay payments
-- [ ] Shipping / live tracking
-- [ ] Reviews
-- [ ] Admin: commission, reports
-- [ ] React frontend
+- [x] Vendor approval, categories & products, inventory
+- [x] Cart, wishlist, coupons
+- [x] Checkout, orders, Razorpay payments
+- [x] Shipping / live tracking
+- [x] Reviews
+- [x] Admin: commission rules, vendor payouts (Celery), platform reports
+- [ ] React frontend — auth (register/login/logout) done; browse/cart/checkout/vendor/admin dashboards in progress
 
 ## Project layout
 
@@ -45,7 +45,12 @@ backend/
 db/
   schema.sql       hand-written MySQL schema — the source of truth for the data model
 frontend/
-  src/features/    one folder per feature (auth, cart, checkout, vendor-dashboard, ...)
+  src/
+    api/           thin fetch wrapper (client.js) + one file per domain's API calls
+    context/       AuthContext — JWT storage, decoded user/role, login/register/logout
+    components/    shared UI (Layout/navbar, ProtectedRoute)
+    features/      one folder per feature (auth, cart, checkout, vendor-dashboard, ...)
+    pages/         top-level pages not tied to one feature (Home, 404)
 ```
 
 ## Running locally
@@ -56,11 +61,20 @@ docker compose up --build
 ```
 
 - API: http://localhost:8000
-- Frontend: http://localhost:5173 (once Phase 7 lands)
+- Frontend: http://localhost:5173
 
 ## Running backend tests
 
 ```bash
 docker compose exec backend pytest
 docker compose exec backend ruff check .
+```
+
+## Running frontend checks
+
+```bash
+cd frontend
+npm install
+npm run lint
+npm run build
 ```
