@@ -1,4 +1,5 @@
 import pytest
+import razorpay
 
 from apps.cart.models import CartItem
 from apps.coupons.models import Coupon
@@ -225,3 +226,30 @@ def test_order_items_default_pending_fulfillment(
 
     item = OrderItem.objects.get(order__user=customer)
     assert item.fulfillment_status == OrderItem.FulfillmentStatus.PENDING
+
+
+def test_checkout_rolls_back_order_when_razorpay_rejects_the_request(
+    api_client, customer, address, vendor, category, mock_razorpay
+):
+    # Reproduces what actually happened testing this in a browser
+    # against placeholder Razorpay credentials: create_payment_for_order()
+    # raises after checkout() already committed an order with reserved
+    # stock. The whole request must roll back together, not leave that
+    # order and reservation stranded with a 500 and no way to pay.
+    mock_razorpay.order.create.side_effect = razorpay.errors.BadRequestError("invalid api key")
+    product = make_product(vendor, category)
+    _stock(product, 10)
+    add_to_cart(customer, product)
+    api_client.force_authenticate(user=customer)
+
+    response = api_client.post(
+        "/api/orders/checkout/",
+        {"shipping_address_id": address.pk, "billing_address_id": address.pk},
+    )
+
+    assert response.status_code == 502
+    assert not Order.objects.exists()
+    assert not Payment.objects.exists()
+    assert CartItem.objects.filter(cart__user=customer).count() == 1
+    product.inventory.refresh_from_db()
+    assert product.inventory.reserved_quantity == 0

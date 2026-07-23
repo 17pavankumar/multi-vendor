@@ -44,6 +44,11 @@ export default function Layout() {
                     </Link>
                   </li>
                   <li className="nav-item">
+                    <Link className="nav-link" to="/orders">
+                      Orders
+                    </Link>
+                  </li>
+                  <li className="nav-item">
                     <span className="nav-link">
                       {user.email} <span className="badge text-bg-secondary text-uppercase">{user.role}</span>
                     </span>
